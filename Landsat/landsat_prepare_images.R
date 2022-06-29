@@ -14,7 +14,8 @@
 
 rm(list=ls())
 
-setwd('/media/jon/MODIS_data/Landsat/')
+# setwd('/media/jon/MODIS_data/Landsat/')
+setwd('~/git_repos/IMiBio/Landsat/')
 
 library(terra)
 library(ggplot2)
@@ -35,7 +36,7 @@ landsat45_bands = list(blue="B1", green="B2", red="B3", nir="B4", swir="B5")
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Read metadata ------------
-meta = read.csv(file="LC08_09_OT_C2_L2_METADATA_Path223_Row79.csv")
+meta = read.csv(file="LC08_09_OT_C2_L2_METADATA_Path224_Row78.csv")
 
 # convert dates into POSIX dates
 meta$Date = as.Date(meta$Date.Acquired, format="%Y/%m/%d")
@@ -43,7 +44,7 @@ meta$Date = as.Date(meta$Date.Acquired, format="%Y/%m/%d")
 
 
 # Create subset of metadata for the files we want to process and put them in date order
-meta_sub = subset(meta, Satellite==8 & format(Date,"%Y")==2019 & format(Date,"%m")==11)
+meta_sub = subset(meta, Satellite==8 & format(Date,"%Y")==2019 )
 
 # Sort into date order
 meta_sub = meta_sub[order(meta_sub$Date),]
@@ -55,9 +56,12 @@ meta_sub$Ordering.ID
 
 # Create a file that can be used to order the landsat data using the 
 # USGS system (https://earthexplorer.usgs.gov/settings?page=scenelist)
+
+# order_list = paste0(meta_sub$Landsat.Product.Identifier.L2,'_SR_',landsat8_bands,'.TIF')
+order_list = meta_sub$Landsat.Product.Identifier.L2
 order_file = file("USGS_SceneList_dataset.txt", "w")
 writeLines(text="#LANDSAT_8_C2|DISPLAY_ID", con=order_file)
-writeLines(text=meta_sub$Landsat.Product.Identifier.L2, con=order_file)
+writeLines(text=order_list, con=order_file)
 close(order_file)
 
 
