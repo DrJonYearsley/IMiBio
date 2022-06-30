@@ -6,7 +6,8 @@
 #    3. Orders the products by date
 #    4. Checks that the product files are available in the folder
 #    5. Imports 5 bands for each landsat scene (blue, green, red, nir, swir)
-#    6. Writes all the bands from a scene into a single geotiff
+#    6. Scales the reflectances and removes the bias
+#    7. Writes all the bands from a scene into a single geotiff
 #
 # Jon Yearsley
 # June 2022
@@ -32,7 +33,10 @@ landsat7_bands = list(blue="B1", green="B2", red="B3", nir="B4", swir="B5")
 landsat45_bands = list(blue="B1", green="B2", red="B3", nir="B4", swir="B5")
 
 
-
+# Scaling and offset for Landsat levl 2 products
+# https://www.usgs.gov/faqs/how-do-i-use-scale-factor-landsat-level-2-science-products
+landsat_collection2 = list(fill=0, gain=0.0000275, offset=0)
+landsat_collection1 = list(fill=-9999, gain=0.0001, offset=0)
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Read metadata ------------
@@ -137,10 +141,16 @@ for (f in file_base) {
   # Create list of files to import in required order
   file_import_list = paste0(f,'_SR_',landsat8_bands,'.TIF')
   
-  # Import swir band
+  # Import all bands (blue, green red, nir, swir)
   stacked_data = rast(x = file_import_list)
   
+  # Crop the data
   cropped_stack = crop(stacked_data, project(target, stacked_data))
+  
+  # Scale the data
+  cropped_stack[cropped_stack==landsat_collection2$fill]=NA    # Set missing value
+  cropped_stack = cropped_stack*landsat_collection2$gain + landsat_collection2$offset  
+  
   
   # Save the stacked raster to one file
   writeRaster(cropped_stack, file=paste0('CROPPED_',f,'_STACKED.TIF'), overwrite=TRUE)
