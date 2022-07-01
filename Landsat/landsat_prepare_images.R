@@ -16,10 +16,12 @@
 rm(list=ls())
 
 # setwd('/media/jon/MODIS_data/Landsat/')
-setwd('~/git_repos/IMiBio/Landsat/')
+setwd('~/git_repos/IMiBio/Landsat')
 
 library(terra)
 library(ggplot2)
+
+dataDir = '~/Research/IMiBio/Landsat/2019_data_path224_row78'
 
 # Lat-long coords for cropping region
 e = ext(-54.9, -54.0, -25.9, -25.38)  # Define an extent around IMiBio
@@ -74,6 +76,7 @@ close(order_file)
 # Visualise metadata ------
 
 
+
 # for all years
 ggplot(data=meta,
        aes(x=Date,
@@ -82,7 +85,7 @@ ggplot(data=meta,
   theme_bw()
 
 # Visualise metadata for one year
-ggplot(data=subset(meta, format(Date,'%Y')=='2017'),
+ggplot(data=subset(meta, format(Date,'%Y')=='2019'),
        aes(x=Date,
            y=Land.Cloud.Cover)) +
   geom_point() + 
@@ -102,15 +105,21 @@ ggplot(data=subset(meta, format(Date,'%Y')=='2017'),
 prefix = strsplit(meta_sub$Landsat.Product.Identifier.L2[1],'_',fixed=TRUE)[[1]][1]
 
 # List all files (from band 6) that have the identifier prefix
-files = list.files(path=".", 
+files = list.files(path=dataDir, 
                    pattern=paste0("^",prefix,"[[:graph:]]+_SR_B6.TIF$"),
                    full.names = FALSE)
 
 # Create filename base by removing band 6 and .TIF 
 file_base = unlist(strsplit(files, split='_SR_B6.TIF', fixed=TRUE))
 
+# Sort into date order
+file_dates = unlist(lapply(strsplit(file_base, split='_',fixed=T), FUN=function(x){x[4]}))
 
+# Convert date text into dates
+file_dates = as.Date(file_dates, format='%Y%m%d')
 
+# Make sure files are in date order
+file_base = file_base[order(file_dates)]
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Check all the files in the metadata subset have been found
@@ -130,7 +139,7 @@ if (all(meta_sub$Landsat.Product.Identifier.L2 %in% file_base)) {
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # If all files present import them, crop them and save them into  geotifs
 
-# Create a polygon for croping
+# Create a polygon for cropping (define using WGS84)
 geom_mat = rbind(c(e[1],e[3]), c(e[1],e[4]), c(e[2],e[4]),c(e[2],e[3]))
 target <- vect(x=geom_mat, type='polygons', crs="epsg:4326")
 
@@ -138,23 +147,35 @@ target <- vect(x=geom_mat, type='polygons', crs="epsg:4326")
 
 # Loop around all the files and import raster info, then save in separate files
 for (f in file_base) {
+  
+  print(f)
+  
   # Create list of files to import in required order
-  file_import_list = paste0(f,'_SR_',landsat8_bands,'.TIF')
-  
+  file_import_list = file.path(dataDir,paste0(f,'_SR_',landsat8_bands,'.TIF'))
+
+
   # Import all bands (blue, green red, nir, swir)
-  stacked_data = rast(x = file_import_list)
+  tmp = rast(x = file_import_list)
   
-  # Crop the data
-  cropped_stack = crop(stacked_data, project(target, stacked_data))
+  # Crop the data (Landsat data should be in CRS EPSG:32621 for path 224, row 78)
+  tmp_cropped = crop(tmp, project(target, tmp))
+  
   
   # Scale the data
-  cropped_stack[cropped_stack==landsat_collection2$fill]=NA    # Set missing value
-  cropped_stack = cropped_stack*landsat_collection2$gain + landsat_collection2$offset  
+  tmp_cropped[tmp_cropped==landsat_collection2$fill] = NA    # Set missing value
+  tmp_cropped= tmp_cropped*landsat_collection2$gain + landsat_collection2$offset  
   
-  
-  # Save the stacked raster to one file
-  writeRaster(cropped_stack, file=paste0('CROPPED_',f,'_STACKED.TIF'), overwrite=TRUE)
+  if (f==file_base[1]) {
+    cropped_stacked = tmp_cropped
+  } else {
+    cropped_stacked = c(cropped_stacked, tmp_cropped)
+      }
 }
+
+
+# Save the stacked raster to one file
+writeRaster(cropped_stacked, file=paste0('CROPPED_',prefix,'_STACKED.TIF'), overwrite=TRUE)
+
 
 
 
