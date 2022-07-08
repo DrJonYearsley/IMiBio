@@ -2,7 +2,8 @@
 #
 # This file:
 #    1. Read in the metadata for the required landsat scenes
-#    2. Creaes a list of landsat products required
+#    2. Creates a file with sun altitude and azimuth
+#    2. Creates a list of landsat products required
 #    3. Orders the products by date
 #    4. Checks that the product files are available in the folder
 #    5. Imports 5 bands for each landsat scene (blue, green, red, nir, swir)
@@ -22,11 +23,14 @@ library(terra)
 library(ggplot2)
 
 dataDir = '~/Research/IMiBio/Landsat/2019_data_path224_row78'
+metadataFile = './LC08_09_OT_C2_L2_METADATA_Path224_Row78.csv'
+outputDir = '~/Research/IMiBio/Landsat/preprocess/'
 
 # Lat-long coords for cropping region
 e = ext(-54.9, -54.0, -25.9, -25.38)  # Define an extent around IMiBio
 
-# e = ext(-54.2, -54, -27, -27.1)  # Another extent (not near IMiBio)
+
+e = ext(-54.7, -54.3, -25.8, -25.5)  # Another extent (not near IMiBio)
 
 
 # Definition of bands for landsat 8/9, landsat 7 and landsat 4/5
@@ -42,7 +46,7 @@ landsat_collection1 = list(fill=-9999, gain=0.0001, offset=0)
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Read metadata ------------
-meta = read.csv(file="LC08_09_OT_C2_L2_METADATA_Path224_Row78.csv")
+meta = read.csv(file=metadataFile)
 
 # convert dates into POSIX dates
 meta$Date = as.Date(meta$Date.Acquired, format="%Y/%m/%d")
@@ -72,37 +76,89 @@ close(order_file)
 
 
 
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Visualise metadata ------
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Write sun alt and azimuth -------
+sun_alt_az = data.frame(alt = 90 - meta_sub$Sun.Elevation.L0RA,
+                        azimuth = meta_sub$Sun.Azimuth.L0RA)
+
+prefix = paste0(strsplit(meta_sub$Landsat.Product.Identifier.L2[1],
+                         '_',
+                         fixed=TRUE)[[1]][1:3],
+                collapse='_')
+sun_filename = paste0(prefix,'_sun_angle.txt')
+write.table(sun_alt_az, 
+            file=file.path(outputDir,sun_filename), 
+            sep=' ', 
+            row.names=FALSE, 
+            col.names=FALSE)
 
 
 
-# for all years
-ggplot(data=meta,
-       aes(x=Date,
-           y=Land.Cloud.Cover)) +
-  geom_point() + 
-  theme_bw()
-
-# Visualise metadata for one year
-ggplot(data=subset(meta, format(Date,'%Y')=='2019'),
-       aes(x=Date,
-           y=Land.Cloud.Cover)) +
-  geom_point() + 
-  theme_bw()
 
 
 
 
 
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# ++++++++++++++++++++++++++++++++++++++++++++
+# Write a file with auxilliary data ----------
+
+# Create a file with cloud cover, daytime, day of year info
+aux_data = data.frame(doy=format(meta_sub$Date,"%j"),
+                      cloud.cover=meta_sub$Land.Cloud.Cover,
+                      daytime = meta_sub$Day.Night.Indicator,
+                      StartTime = meta_sub$Start.Time,
+                      StopTime = meta_sub$Stop.Time)
+
+
+
+aux_filename = paste0(prefix,'_auxillary.csv')
+write.table(aux_data, 
+            file=file.path(outputDir,aux_filename), 
+            sep=',', 
+            row.names=FALSE, 
+            col.names=TRUE)
+
+
+
+
+
+
+
+
+# # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Visualise metadata ------
+# 
+# 
+# 
+# # for all years
+# ggplot(data=meta,
+#        aes(x=Date,
+#            y=Land.Cloud.Cover)) +
+#   geom_point() + 
+#   theme_bw()
+# 
+# # Visualise metadata for one year
+# ggplot(data=subset(meta, format(Date,'%Y')=='2019'),
+#        aes(x=Date,
+#            y=Land.Cloud.Cover)) +
+#   geom_point() + 
+#   theme_bw()
+# 
+# 
+# 
+# 
+# 
 
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Import raster data for all geotiffs in the current directory ------
 
-# Fine raster files matching a pattern in the meta data subset
-prefix = strsplit(meta_sub$Landsat.Product.Identifier.L2[1],'_',fixed=TRUE)[[1]][1]
+# Find raster files matching a pattern in the meta data subset
 
 # List all files (from band 6) that have the identifier prefix
 files = list.files(path=dataDir, 
@@ -121,6 +177,9 @@ file_dates = as.Date(file_dates, format='%Y%m%d')
 # Make sure files are in date order
 file_base = file_base[order(file_dates)]
 
+
+
+
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Check all the files in the metadata subset have been found
 if (all(meta_sub$Landsat.Product.Identifier.L2 %in% file_base)) {
@@ -131,6 +190,8 @@ if (all(meta_sub$Landsat.Product.Identifier.L2 %in% file_base)) {
   print('These need to be downloaded into this folder')
 }
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 
 
 
@@ -174,22 +235,77 @@ for (f in file_base) {
 
 
 # Save the stacked raster to one file
-writeRaster(cropped_stacked, file=paste0('CROPPED_',prefix,'_STACKED.TIF'), overwrite=TRUE)
+writeRaster(cropped_stacked, 
+            file=file.path(outputDir,paste0(prefix,'_CROPPED_STACKED.TIF')), 
+            overwrite=TRUE)
 
 
 
 
 
 
-# 
-# extractbit = function(x,n1) {
-#   # Extract the nth bit from the number x
-#   return(bitwAnd(bitwShiftR(x,n1),1))
-# }
-# 
-# 
-# extractbit2 = function(x,n) {
-#   floor((x-2^(n+1)*floor(x/2^(n+1)))/2^n)
-# }
-# 
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Write a water mask ---------
+
+
+# Pick a cloud free scene
+scene_id = which.min(meta_sub$Scene.Cloud.Cover.L1)
+
+scene = cropped_stacked[[c(1:5)+(scene_id-1)*5]]
+names(scene) = c('blue','green','red','nir','swir')
+
+
+# Calculate NDWI (Normalized Difference Water Index )
+ndwi = (scene$green- scene$nir) / (scene$green+scene$nir)
+
+# Modified Normalized Difference Water Index 
+mndwi = (scene$green- scene$swir) / (scene$green+scene$swir)
+
+
+# Calculate NRCWI (None-Radiation-Calibration Water Index)
+# (from paper https://doi.org/10.1080/10106049.2018.1552324).
+# Values greater than 0 are water
+nrcwi = (scene$green - 0.33*scene$nir  - 0.67*scene$swir) / (scene$green + scene$swir)
+plot(nrcwi)
+
+
+
+# Create mask with 1 over land
+mask = nrcwi<0
+names(mask) = 'land'
+
+# Reclassify a land based on adjacent pixels 
+# and save to a cleaned raster (mask2)
+water = unlist(cells(mask,y=0))
+neighInd = adjacent(mask, cells=water, directions="knight", include=FALSE) 
+mask2 = mask
+for (t in 1:length(water)) {
+  ind = !is.na(neighInd[t,])
+  if (sum(mask[neighInd[t,ind]]==FALSE)<=4) {
+    mask2[water[t]] = TRUE   # Set pixel to TRUE (i.e. land)
+  }
+}
+
+
+# Old code to manually create a mask
+# mask = rast(extent=ext(scene), 
+#             crs=crs(scene), 
+#             resolution = res(scene), 
+#             vals=nrcwi<0, 
+#             nlyrs=1)
+
+
+# Visualise the two masks
+# plot(mask2)
+# plot(mask)
+
+
+# Save the mask using signed 16bit integers (i.e. 2 byte integers)
+writeRaster(mask2, 
+            filename=file.path(outputDir,paste0(prefix,'_WATERMASK.TIF')), 
+            datatype='INT2S', 
+            overwrite=TRUE)
 
