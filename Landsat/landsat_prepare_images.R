@@ -7,7 +7,7 @@
 #    3. Orders the products by date
 #    4. Checks that the product files are available in the folder
 #    5. Imports 5 bands for each landsat scene (blue, green, red, nir, swir)
-#    6. Scales the reflectances and removes the bias
+#    6. (disabled) Scales the reflectances and removes the bias
 #    7. Writes all the bands from a scene into a single geotiff
 #
 # Jon Yearsley
@@ -24,7 +24,7 @@ library(ggplot2)
 
 dataDir = '~/Research/IMiBio/Landsat/2019_data_path224_row78'
 metadataFile = './LC08_09_OT_C2_L2_METADATA_Path224_Row78.csv'
-outputDir = '~/Research/IMiBio/Landsat/preprocess/'
+outputDir = '~/Research/IMiBio/Landsat/preprocess'
 
 # Lat-long coords for cropping region
 e = ext(-54.9, -54.0, -25.9, -25.38)  # Define an extent around IMiBio
@@ -222,9 +222,9 @@ for (f in file_base) {
   tmp_cropped = crop(tmp, project(target, tmp))
   
   
-  # Scale the data
-  tmp_cropped[tmp_cropped==landsat_collection2$fill] = NA    # Set missing value
-  tmp_cropped= tmp_cropped*landsat_collection2$gain + landsat_collection2$offset  
+  # # Scale the data
+  # tmp_cropped[tmp_cropped==landsat_collection2$fill] = NA    # Set missing value
+  # tmp_cropped= tmp_cropped*landsat_collection2$gain + landsat_collection2$offset  
   
   if (f==file_base[1]) {
     cropped_stacked = tmp_cropped
@@ -237,7 +237,8 @@ for (f in file_base) {
 # Save the stacked raster to one file
 writeRaster(cropped_stacked, 
             file=file.path(outputDir,paste0(prefix,'_CROPPED_STACKED.TIF')), 
-            overwrite=TRUE)
+            overwrite=TRUE,
+            datatype='INT2S')
 
 
 
