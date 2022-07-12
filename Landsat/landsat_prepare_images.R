@@ -41,7 +41,7 @@ landsat45_bands = list(blue="B1", green="B2", red="B3", nir="B4", swir="B5")
 
 # Scaling and offset for Landsat levl 2 products
 # https://www.usgs.gov/faqs/how-do-i-use-scale-factor-landsat-level-2-science-products
-landsat_collection2 = list(fill=0, gain=0.0000275, offset=0)
+landsat_collection2 = list(fill=0, gain=0.0000275, offset=-0.2)
 landsat_collection1 = list(fill=-9999, gain=0.0001, offset=0)
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -54,7 +54,7 @@ meta$Date = as.Date(meta$Date.Acquired, format="%Y/%m/%d")
 
 
 # Create subset of metadata for the files we want to process and put them in date order
-meta_sub = subset(meta, Satellite==8 & format(Date,"%Y")==2019 )
+meta_sub = subset(meta, Satellite==8 & format(Date,"%Y")==2019 & as.numeric(format(Date,"%m"))<6)
 
 # Sort into date order
 meta_sub = meta_sub[order(meta_sub$Date),]
@@ -193,7 +193,8 @@ if (all(meta_sub$Landsat.Product.Identifier.L2 %in% file_base)) {
 
 
 
-
+# Keep only dates in meta_sub dataframe
+file_base = file_base[file_base %in% meta_sub$Landsat.Product.Identifier.L2]
 
 
 
@@ -270,7 +271,7 @@ mndwi = (scene$green- scene$swir) / (scene$green+scene$swir)
 # (from paper https://doi.org/10.1080/10106049.2018.1552324).
 # Values greater than 0 are water
 nrcwi = (scene$green - 0.33*scene$nir  - 0.67*scene$swir) / (scene$green + scene$swir)
-plot(nrcwi)
+# plot(nrcwi)
 
 
 
@@ -281,7 +282,7 @@ names(mask) = 'land'
 # Reclassify a land based on adjacent pixels 
 # and save to a cleaned raster (mask2)
 water = unlist(cells(mask,y=0))
-neighInd = adjacent(mask, cells=water, directions="knight", include=FALSE) 
+neighInd = adjacent(mask, cells=water, directions="16", include=FALSE) 
 mask2 = mask
 for (t in 1:length(water)) {
   ind = !is.na(neighInd[t,])
